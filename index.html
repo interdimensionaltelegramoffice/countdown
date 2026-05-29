@@ -1,0 +1,1448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trainset Countdown</title>
+  <style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #f5f0e8;
+  color: #333;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────────── */
+header {
+  background: #2c1810;
+  color: #f5f0e8;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.header-top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px;
+}
+
+h1 {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+nav {
+  display: flex;
+  gap: 4px;
+}
+
+nav button {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.3);
+  color: rgba(255,255,255,0.7);
+  padding: 5px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.15s;
+}
+
+nav button.active,
+nav button:hover {
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  border-color: rgba(255,255,255,0.6);
+}
+
+/* ── Inventory bar ───────────────────────────────────────────────────────────── */
+.inventory-bar {
+  display: flex;
+  gap: 8px;
+  padding: 6px 16px;
+  background: #3d2415;
+  flex-wrap: wrap;
+  align-items: center;
+  min-height: 42px;
+}
+
+.inv-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 4px;
+  color: #f5f0e8;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.15s;
+}
+
+.inv-item:hover,
+.inv-item.active {
+  background: rgba(255,255,255,0.25);
+  border-color: rgba(255,255,255,0.7);
+}
+
+.inv-item.active {
+  outline: 2px solid #4a9eff;
+  outline-offset: 1px;
+}
+
+.inv-icon { font-size: 16px; }
+.inv-empty { color: rgba(255,255,255,0.45); font-size: 13px; font-style: italic; }
+
+/* ── Status bar ─────────────────────────────────────────────────────────────── */
+.status-bar {
+  padding: 4px 16px;
+  background: #4a9eff;
+  color: #fff;
+  font-size: 13px;
+}
+
+.status-bar.error {
+  background: #e74c3c;
+}
+
+/* ── Main / views ────────────────────────────────────────────────────────────── */
+main {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+section {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ── Map view ────────────────────────────────────────────────────────────────── */
+#map-view {
+  background: #d4e8f0;
+  position: relative;
+}
+
+#us-map {
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+
+#us-map:active { cursor: grabbing; }
+
+#us-outline {
+  filter: drop-shadow(1px 1px 2px rgba(0,0,0,0.1));
+}
+
+.hub-dot {
+  transition: r 0.1s, fill 0.1s;
+  cursor: pointer;
+}
+
+.hub-label {
+  font-size: 10px;
+  fill: #444;
+  user-select: none;
+}
+
+.rail-line {
+  cursor: pointer;
+}
+
+.train-loco { cursor: pointer; }
+
+#reset-view {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  background: rgba(255,255,255,0.85);
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  z-index: 10;
+}
+#reset-view:hover { background: #fff; }
+
+/* ── Calendar view ───────────────────────────────────────────────────────────── */
+#calendar-view {
+  overflow-y: auto;
+  padding: 20px;
+  background: #fdf6ec;
+}
+
+#calendar-view h2 {
+  font-size: 22px;
+  margin-bottom: 6px;
+  color: #2c1810;
+}
+
+.calendar-info {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 16px;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  max-width: 700px;
+}
+
+.door {
+  aspect-ratio: 1;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-size: 12px;
+  position: relative;
+  border: 2px solid transparent;
+}
+
+.door-num {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.6;
+  position: absolute;
+  top: 4px;
+  left: 6px;
+}
+
+.door-icon { font-size: 20px; }
+.door-label { font-size: 10px; text-align: center; line-height: 1.2; }
+
+.door.locked {
+  background: #d4c5b0;
+  color: #888;
+  border-color: #bbb;
+}
+
+.door-countdown {
+  font-size: 10px;
+  color: #999;
+  font-variant-numeric: tabular-nums;
+}
+
+.door.unlocked {
+  background: #fff8e7;
+  border-color: #e8c040;
+  cursor: pointer;
+  animation: pulse-door 1.5s ease-in-out infinite;
+  box-shadow: 0 0 8px rgba(232,192,64,0.4);
+}
+
+.door.unlocked:hover {
+  background: #fff3c0;
+  transform: scale(1.05);
+  animation: none;
+}
+
+.door.opened {
+  background: #f0f8e8;
+  border-color: #7cb87c;
+  color: #555;
+}
+
+@keyframes pulse-door {
+  0%, 100% { box-shadow: 0 0 6px rgba(232,192,64,0.3); }
+  50%       { box-shadow: 0 0 14px rgba(232,192,64,0.7); }
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+  .calendar-grid { grid-template-columns: repeat(5, 1fr); }
+  h1 { font-size: 15px; }
+}
+
+</style>
+</head>
+<body>
+  <header>
+    <div class="header-top">
+      <h1>🚂 Trainset Countdown</h1>
+      <nav>
+        <button id="tab-map" class="active">Map</button>
+        <button id="tab-calendar">Calendar</button>
+      </nav>
+    </div>
+    <div id="inventory-bar" class="inventory-bar"></div>
+    <div id="status-bar" class="status-bar" hidden></div>
+  </header>
+
+  <main>
+    <section id="map-view">
+      <button id="reset-view" title="Reset zoom/pan">⌂ Reset view</button>
+      <svg id="us-map" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet">
+        <!--
+          Continental US outline — ~95 waypoints, clockwise from NW Washington.
+          Projection: x=(lon+125)/60*1000, y=(50-lat)/25.5*600
+        -->
+        <path id="us-outline" d="
+          M 17,14
+          L 5,37 L 10,63 L 15,77 L 17,89 L 18,96
+          L 18,118 L 17,139 L 11,155 L 7,169
+          L 13,196 L 11,226 L 20,249 L 34,283 L 42,293
+          L 51,316 L 65,336 L 75,366 L 95,370
+          L 113,383 L 130,408 L 132,412
+          L 170,412 L 200,440 L 233,440 L 280,428 L 310,428
+          L 342,475 L 367,484 L 408,484
+          L 408,501 L 425,529 L 435,554 L 463,565
+          L 460,522 L 483,504 L 493,496 L 503,487
+          L 518,477 L 563,477 L 585,473 L 598,494
+          L 602,461 L 617,461 L 630,461 L 640,459
+          L 655,465 L 667,477 L 690,477 L 700,491
+          L 708,520 L 718,548 L 720,562 L 733,585
+          L 747,570
+          L 748,548 L 745,532 L 739,508 L 733,490 L 722,465
+          L 725,446 L 732,424 L 739,420
+          L 768,384 L 785,381 L 808,362
+          L 825,345 L 817,308
+          L 832,275 L 835,261
+          L 850,219 L 885,212 L 892,195
+          L 913,186 L 905,173 L 912,147 L 932,137 L 967,120
+          L 953,59
+          L 900,111 L 875,118 L 842,118
+          L 808,138 L 790,158 L 765,165
+          L 748,186 L 722,200 L 705,203 L 692,200
+          L 698,182 L 710,165
+          L 678,82 L 617,59 L 548,75
+          L 497,24 L 133,14 Z
+        " fill="#e8f4e8" stroke="#bbb" stroke-width="1.5"/>
+        <!-- Pan/zoom group + layers inserted by initLayers() -->
+      </svg>
+    </section>
+
+    <section id="calendar-view" hidden>
+      <h2>Countdown Calendar</h2>
+      <p class="calendar-info">A new door unlocks every hour from 13:00 BST on Friday 29 May through Sunday 31 May 2026.</p>
+      <div id="calendar-grid" class="calendar-grid"></div>
+    </section>
+  </main>
+
+  <script type="module">
+// ── src/hubs.js ──────────────────────────────────────────────────────────
+const HUBS = [
+  { id: 'Seattle',      label: 'Seattle',        x: 45,  y: 56  },
+  { id: 'Portland',     label: 'Portland',        x: 38,  y: 106 },
+  { id: 'SanFrancisco', label: 'San Francisco',   x: 43,  y: 287 },
+  { id: 'LosAngeles',   label: 'Los Angeles',     x: 113, y: 374 },
+  { id: 'LasVegas',     label: 'Las Vegas',       x: 165, y: 325 },
+  { id: 'Phoenix',      label: 'Phoenix',         x: 215, y: 388 },
+  { id: 'SaltLake',     label: 'Salt Lake City',  x: 218, y: 216 },
+  { id: 'Denver',       label: 'Denver',          x: 335, y: 242 },
+  { id: 'Albuquerque',  label: 'Albuquerque',     x: 305, y: 351 },
+  { id: 'ElPaso',       label: 'El Paso',         x: 308, y: 428 },
+  { id: 'Dallas',       label: 'Dallas',          x: 470, y: 405 },
+  { id: 'KansasCity',   label: 'Kansas City',     x: 507, y: 256 },
+  { id: 'Fargo',        label: 'Fargo',           x: 470, y: 73  },
+  { id: 'Minneapolis',  label: 'Minneapolis',     x: 528, y: 120 },
+  { id: 'Chicago',      label: 'Chicago',         x: 623, y: 191 },
+  { id: 'StLouis',      label: 'St. Louis',       x: 580, y: 268 },
+  { id: 'NewOrleans',   label: 'New Orleans',     x: 582, y: 471 },
+  { id: 'Atlanta',      label: 'Atlanta',         x: 677, y: 384 },
+  { id: 'Miami',        label: 'Miami',           x: 747, y: 569 },
+  { id: 'Cleveland',    label: 'Cleveland',       x: 722, y: 200 },
+  { id: 'WashingtonDC', label: 'Washington DC',   x: 800, y: 261 },
+  { id: 'NewYork',      label: 'New York',        x: 850, y: 219 },
+  { id: 'Boston',       label: 'Boston',          x: 898, y: 179 },
+]
+
+const HUB_MAP = new Map(HUBS.map(h => [h.id, h]))
+
+function getHubAtPoint(x, y, radius = 14) {
+  for (const hub of HUBS) {
+    const dx = hub.x - x
+    const dy = hub.y - y
+    if (Math.sqrt(dx * dx + dy * dy) <= radius) return hub
+  }
+  return null
+}
+
+
+// ── src/connections.js ──────────────────────────────────────────────────────────
+function connectionKey(hubA, hubB) {
+  return [hubA, hubB].sort().join('-')
+}
+
+const VALID_PAIRS = new Set([
+  // Pacific Coast
+  connectionKey('Seattle', 'Portland'),
+  connectionKey('Portland', 'SanFrancisco'),
+  connectionKey('SanFrancisco', 'LosAngeles'),
+  // Southwest
+  connectionKey('LosAngeles', 'LasVegas'),
+  connectionKey('LosAngeles', 'Phoenix'),
+  connectionKey('LasVegas', 'SaltLake'),
+  connectionKey('SaltLake', 'Denver'),
+  connectionKey('Phoenix', 'ElPaso'),
+  connectionKey('Denver', 'Albuquerque'),
+  connectionKey('Albuquerque', 'ElPaso'),
+  // Plains
+  connectionKey('ElPaso', 'Dallas'),
+  connectionKey('Denver', 'KansasCity'),
+  connectionKey('Denver', 'Dallas'),
+  // Midwest
+  connectionKey('KansasCity', 'StLouis'),
+  connectionKey('KansasCity', 'Chicago'),
+  connectionKey('StLouis', 'Chicago'),
+  connectionKey('Chicago', 'Minneapolis'),
+  connectionKey('Chicago', 'Cleveland'),
+  connectionKey('Minneapolis', 'Fargo'),
+  // South
+  connectionKey('StLouis', 'NewOrleans'),
+  connectionKey('NewOrleans', 'Dallas'),
+  connectionKey('NewOrleans', 'Atlanta'),
+  connectionKey('Dallas', 'Atlanta'),
+  connectionKey('Atlanta', 'WashingtonDC'),
+  connectionKey('Atlanta', 'Miami'),
+  // East Coast
+  connectionKey('Chicago', 'NewYork'),
+  connectionKey('Cleveland', 'WashingtonDC'),
+  connectionKey('WashingtonDC', 'NewYork'),
+  connectionKey('NewYork', 'Boston'),
+])
+
+const CONNECTIONS = [...VALID_PAIRS].map(key => {
+  const [a, b] = key.split('-')
+  return [a, b]
+})
+
+function isValidConnection(hubA, hubB) {
+  if (hubA === hubB) return false
+  return VALID_PAIRS.has(connectionKey(hubA, hubB))
+}
+
+function getNeighbours(hubId) {
+  const neighbours = []
+  for (const key of VALID_PAIRS) {
+    const [a, b] = key.split('-')
+    if (a === hubId) neighbours.push(b)
+    else if (b === hubId) neighbours.push(a)
+  }
+  return neighbours
+}
+
+
+// ── src/unlockables.js ──────────────────────────────────────────────────────────
+const UNLOCKABLES = [
+  { door: 1,  type: 'rail',    label: 'Rail Section' },
+  { door: 2,  type: 'train',   color: '#e74c3c', name: 'Red Rocket',     label: 'Red Rocket' },
+  { door: 3,  type: 'carriage', label: 'Carriage' },
+  { door: 4,  type: 'rail',    label: 'Rail Section' },
+  { door: 5,  type: 'train',   color: '#3498db', name: 'Blue Arrow',     label: 'Blue Arrow' },
+  { door: 6,  type: 'rail',    label: 'Rail Section' },
+  { door: 7,  type: 'carriage', label: 'Carriage' },
+  { door: 8,  type: 'rail',    label: 'Rail Section' },
+  { door: 9,  type: 'train',   color: '#2ecc71', name: 'Green Flyer',    label: 'Green Flyer' },
+  { door: 10, type: 'rail',    label: 'Rail Section' },
+  { door: 11, type: 'carriage', label: 'Carriage' },
+  { door: 12, type: 'rail',    label: 'Rail Section' },
+  { door: 13, type: 'train',   color: '#e67e22', name: 'Orange Express', label: 'Orange Express' },
+  { door: 14, type: 'rail',    label: 'Rail Section' },
+  { door: 15, type: 'carriage', label: 'Carriage' },
+  { door: 16, type: 'rail',    label: 'Rail Section' },
+  { door: 17, type: 'train',   color: '#9b59b6', name: 'Purple Palace',  label: 'Purple Palace' },
+  { door: 18, type: 'rail',    label: 'Rail Section' },
+  { door: 19, type: 'carriage', label: 'Carriage' },
+  { door: 20, type: 'rail',    label: 'Rail Section' },
+  { door: 21, type: 'train',   color: '#f1c40f', name: 'Yellow Streak',  label: 'Yellow Streak' },
+  { door: 22, type: 'rail',    label: 'Rail Section' },
+  { door: 23, type: 'carriage', label: 'Carriage' },
+  { door: 24, type: 'rail',    label: 'Rail Section' },
+  { door: 25, type: 'train',   color: '#ff69b4', name: 'Pink Panther',   label: 'Pink Panther' },
+  { door: 26, type: 'rail',    label: 'Rail Section' },
+  { door: 27, type: 'carriage', label: 'Carriage' },
+  { door: 28, type: 'rail',    label: 'Rail Section' },
+  { door: 29, type: 'train',   color: '#00bcd4', name: 'Cyan Comet',     label: 'Cyan Comet' },
+  { door: 30, type: 'rail',    label: 'Rail Section' },
+  { door: 31, type: 'carriage', label: 'Carriage' },
+  { door: 32, type: 'rail',    label: 'Rail Section' },
+  { door: 33, type: 'train',   color: '#8bc34a', name: 'Lime Lightning', label: 'Lime Lightning' },
+  { door: 34, type: 'rail',    label: 'Rail Section' },
+  { door: 35, type: 'carriage', label: 'Carriage' },
+  { door: 36, type: 'rail',    label: 'Rail Section' },
+  { door: 37, type: 'train',   color: '#ffd700', name: 'Gold Rush',      label: 'Gold Rush' },
+  { door: 38, type: 'rail',    label: 'Rail Section' },
+  { door: 39, type: 'carriage', label: 'Carriage' },
+  { door: 40, type: 'rail',    label: 'Rail Section' },
+  { door: 41, type: 'carriage', label: 'Carriage' },
+  { door: 42, type: 'rail',    label: 'Rail Section' },
+  { door: 43, type: 'carriage', label: 'Carriage' },
+  { door: 44, type: 'rail',    label: 'Rail Section' },
+  { door: 45, type: 'carriage', label: 'Carriage' },
+  { door: 46, type: 'rail',    label: 'Rail Section' },
+  { door: 47, type: 'carriage', label: 'Carriage' },
+  { door: 48, type: 'rail',    label: 'Rail Section' },
+  { door: 49, type: 'carriage', label: 'Final Carriage' },
+]
+
+function getUnlockable(doorNumber) {
+  if (doorNumber < 1 || doorNumber > 49) throw new RangeError(`Door ${doorNumber} out of range 1-49`)
+  return UNLOCKABLES[doorNumber - 1]
+}
+
+
+// ── src/calendar.js ──────────────────────────────────────────────────────────
+const BASE_UNLOCK_MS = new Date('2026-05-29T12:00:00Z').getTime()
+
+const TOTAL_DOORS = 49
+const MS_PER_HOUR = 60 * 60 * 1000
+
+function getUnlockTime(doorNumber) {
+  if (doorNumber < 1 || doorNumber > TOTAL_DOORS) throw new RangeError(`Door ${doorNumber} out of range`)
+  return BASE_UNLOCK_MS + (doorNumber - 1) * MS_PER_HOUR
+}
+
+function isDoorUnlocked(doorNumber, now = new Date()) {
+  return now.getTime() >= getUnlockTime(doorNumber)
+}
+
+function getTimeUntilUnlock(doorNumber, now = new Date()) {
+  const remaining = getUnlockTime(doorNumber) - now.getTime()
+  return remaining > 0 ? remaining : 0
+}
+
+function getUnlockedDoorCount(now = new Date()) {
+  const elapsed = now.getTime() - BASE_UNLOCK_MS
+  if (elapsed < 0) return 0
+  return Math.min(Math.floor(elapsed / MS_PER_HOUR) + 1, TOTAL_DOORS)
+}
+
+function formatCountdown(ms) {
+  if (ms <= 0) return '0s'
+  const totalSeconds = Math.ceil(ms / 1000)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  if (hours > 0) return `${hours}h ${minutes}m`
+  if (minutes > 0) return `${minutes}m ${seconds}s`
+  return `${seconds}s`
+}
+
+
+// ── src/trainEngine.js ──────────────────────────────────────────────────────────
+function buildGraph(placedRails) {
+  const graph = new Map()
+  for (const { from, to } of placedRails) {
+    if (!graph.has(from)) graph.set(from, new Set())
+    if (!graph.has(to)) graph.set(to, new Set())
+    graph.get(from).add(to)
+    graph.get(to).add(from)
+  }
+  return graph
+}
+
+function findTraversalPath(graph, startHub) {
+  if (!graph.has(startHub)) return [startHub]
+
+  let best = [startHub]
+
+  function dfs(current, visited, path) {
+    if (path.length > best.length) best = [...path]
+    const neighbours = graph.get(current) ?? new Set()
+    for (const next of [...neighbours].sort()) {
+      if (!visited.has(next)) {
+        visited.add(next)
+        path.push(next)
+        dfs(next, visited, path)
+        path.pop()
+        visited.delete(next)
+      }
+    }
+  }
+
+  dfs(startHub, new Set([startHub]), [startHub])
+  return best
+}
+
+function advanceTrainPosition(pos, deltaSeconds, speedSegmentsPerSecond = 0.15) {
+  let { pathHubs, segmentIndex, progress, direction } = pos
+  const maxSegment = pathHubs.length - 2
+
+  // Single-hub path — nothing to traverse
+  if (maxSegment < 0) return pos
+
+  progress += direction * speedSegmentsPerSecond * deltaSeconds
+
+  // Handle overflow/underflow with reflection
+  while (true) {
+    if (progress >= 1) {
+      if (segmentIndex < maxSegment) {
+        segmentIndex++
+        progress -= 1
+      } else {
+        direction = -1
+        progress = 1 - (progress - 1)
+        break
+      }
+    } else if (progress <= 0) {
+      if (segmentIndex > 0) {
+        segmentIndex--
+        progress += 1
+      } else {
+        direction = 1
+        progress = -progress
+        break
+      }
+    } else {
+      break
+    }
+  }
+
+  // Safety clamp
+  progress = Math.max(0, Math.min(1, progress))
+
+  return { pathHubs, segmentIndex, progress, direction }
+}
+
+function trainHeadCoords(pos, hubMap) {
+  const { pathHubs, segmentIndex, progress } = pos
+  const a = hubMap.get(pathHubs[segmentIndex])
+  const b = hubMap.get(pathHubs[segmentIndex + 1])
+  if (!a || !b) return { x: 0, y: 0 }
+  return {
+    x: a.x + (b.x - a.x) * progress,
+    y: a.y + (b.y - a.y) * progress,
+  }
+}
+
+function positionAtOffset(pos, offsetInSegments, hubMap) {
+  let { pathHubs, segmentIndex, progress } = pos
+  let remaining = offsetInSegments
+
+  while (remaining > 0) {
+    if (progress >= remaining) {
+      progress -= remaining
+      remaining = 0
+    } else {
+      remaining -= progress
+      if (segmentIndex > 0) {
+        segmentIndex--
+        progress = 1
+      } else {
+        progress = 0
+        remaining = 0
+      }
+    }
+  }
+
+  const a = hubMap.get(pathHubs[segmentIndex])
+  const b = hubMap.get(pathHubs[segmentIndex + 1])
+  if (!a || !b) return { x: a?.x ?? 0, y: a?.y ?? 0 }
+  return {
+    x: a.x + (b.x - a.x) * progress,
+    y: a.y + (b.y - a.y) * progress,
+  }
+}
+
+function carriageCoords(pos, carriageIndex, carriageLengthInSegments, hubMap) {
+  const offset = (carriageIndex + 1) * carriageLengthInSegments
+  return positionAtOffset(pos, offset, hubMap)
+}
+
+function trainHeadAngle(pos, hubMap) {
+  const { pathHubs, segmentIndex, direction } = pos
+  const a = hubMap.get(pathHubs[segmentIndex])
+  const b = hubMap.get(pathHubs[segmentIndex + 1])
+  if (!a || !b) return 0
+  const base = Math.atan2(b.y - a.y, b.x - a.x)
+  return direction === 1 ? base : base + Math.PI
+}
+
+function carriageAngle(pos, carriageIndex, carriageLengthInSegments, hubMap) {
+  // Find which segment the carriage centre sits on, use that segment's angle
+  let { pathHubs, segmentIndex, progress } = pos
+  let remaining = (carriageIndex + 1) * carriageLengthInSegments
+  while (remaining > 0) {
+    if (progress >= remaining) { progress -= remaining; remaining = 0 }
+    else { remaining -= progress; if (segmentIndex > 0) { segmentIndex--; progress = 1 } else { progress = 0; remaining = 0 } }
+  }
+  const a = hubMap.get(pathHubs[segmentIndex])
+  const b = hubMap.get(pathHubs[segmentIndex + 1])
+  if (!a || !b) return 0
+  const base = Math.atan2(b.y - a.y, b.x - a.x)
+  return pos.direction === 1 ? base : base + Math.PI
+}
+
+function reconcileTrainsAfterRailRemoval(trains, newGraph) {
+  const strandedIds = []
+  const updatedTrains = trains.map(t => {
+    if (!t.pathPosition) return t
+    const hub = t.pathPosition.pathHubs?.[t.pathPosition.segmentIndex]
+    const neighbours = hub ? newGraph.get(hub) : null
+    if (!neighbours || neighbours.size === 0) {
+      strandedIds.push(t.id)
+      return { ...t, pathPosition: null }
+    }
+    const pathHubs = findTraversalPath(newGraph, hub)
+    return { ...t, pathPosition: { ...t.pathPosition, pathHubs } }
+  })
+  return { trains: updatedTrains, strandedIds }
+}
+
+
+// ── src/gameState.js ──────────────────────────────────────────────────────────
+
+
+const STORAGE_KEY = 'trainset-countdown-state'
+
+function createInitialState() {
+  return {
+    openedDoors: [],
+    inventory: [],
+    placedRails: [],
+    trains: [],
+    carriageCounts: {},
+  }
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return createInitialState()
+    const state = JSON.parse(raw)
+    return restorePathHubs(state)
+  } catch {
+    return createInitialState()
+  }
+}
+
+function saveState(state) {
+  const serialisable = {
+    ...state,
+    trains: state.trains.map(t => {
+      if (!t.pathPosition) return t
+      const { pathHubs: _stripped, ...pos } = t.pathPosition
+      return { ...t, pathPosition: pos }
+    }),
+  }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(serialisable))
+}
+
+function restorePathHubs(state) {
+  const graph = buildGraph(state.placedRails)
+  const trains = state.trains.map(t => {
+    if (!t.pathPosition) return t
+    const hub = t.startHub ?? state.placedRails[0]?.from
+    if (!hub) return { ...t, pathPosition: null }
+    const pathHubs = findTraversalPath(graph, hub)
+    return { ...t, pathPosition: { ...t.pathPosition, pathHubs } }
+  })
+  return { ...state, trains }
+}
+
+function openDoor(state, doorNumber, unlockable) {
+  if (state.openedDoors.includes(doorNumber)) return state
+  const component = unlockable.type === 'train'
+    ? { type: 'train', color: unlockable.color, name: unlockable.name }
+    : { type: unlockable.type }
+  return {
+    ...state,
+    openedDoors: [...state.openedDoors, doorNumber],
+    inventory: [...state.inventory, component],
+  }
+}
+
+function placeRail(state, fromHub, toHub) {
+  if (inventoryRailCount(state) < 1) throw new Error('No rail sections in inventory')
+  if (!isValidConnection(fromHub, toHub)) throw new Error(`${fromHub} and ${toHub} are not a valid connection`)
+  const already = state.placedRails.some(
+    r => (r.from === fromHub && r.to === toHub) || (r.from === toHub && r.to === fromHub)
+  )
+  if (already) throw new Error('Rail already placed on that connection')
+
+  const idx = state.inventory.findIndex(c => c.type === 'rail')
+  const newInventory = [...state.inventory]
+  newInventory.splice(idx, 1)
+
+  const newPlacedRails = [...state.placedRails, { from: fromHub, to: toHub }]
+  const graph = buildGraph(newPlacedRails)
+
+  const updatedTrains = state.trains.map(t => {
+    if (!t.pathPosition) return t
+    const hub = t.startHub ?? t.pathPosition.pathHubs?.[0] ?? fromHub
+    const pathHubs = findTraversalPath(graph, hub)
+    return { ...t, pathPosition: { ...t.pathPosition, pathHubs } }
+  })
+
+  return { ...state, inventory: newInventory, placedRails: newPlacedRails, trains: updatedTrains }
+}
+
+function placeTrain(state, trainColor, fromHub, toHub) {
+  const idx = state.inventory.findIndex(c => c.type === 'train' && c.color === trainColor)
+  if (idx === -1) throw new Error(`No train with color ${trainColor} in inventory`)
+
+  const hasRail = state.placedRails.some(
+    r => (r.from === fromHub && r.to === toHub) || (r.from === toHub && r.to === fromHub)
+  )
+  if (!hasRail) throw new Error(`No rail placed between ${fromHub} and ${toHub}`)
+
+  const trainData = state.inventory[idx]
+  const id = `train-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  const newInventory = [...state.inventory]
+  newInventory.splice(idx, 1)
+
+  const graph = buildGraph(state.placedRails)
+  const pathHubs = findTraversalPath(graph, fromHub)
+
+  const train = {
+    id,
+    color: trainData.color,
+    name: trainData.name,
+    startHub: fromHub,
+    pathPosition: { pathHubs, segmentIndex: 0, progress: 0, direction: 1 },
+  }
+
+  return {
+    ...state,
+    inventory: newInventory,
+    trains: [...state.trains, train],
+    carriageCounts: { ...state.carriageCounts, [id]: 0 },
+  }
+}
+
+function addCarriage(state, trainId) {
+  if (inventoryCarriageCount(state) < 1) throw new Error('No carriages in inventory')
+  const train = state.trains.find(t => t.id === trainId)
+  if (!train) throw new Error(`Train ${trainId} not found`)
+
+  const idx = state.inventory.findIndex(c => c.type === 'carriage')
+  const newInventory = [...state.inventory]
+  newInventory.splice(idx, 1)
+
+  return {
+    ...state,
+    inventory: newInventory,
+    carriageCounts: { ...state.carriageCounts, [trainId]: (state.carriageCounts[trainId] ?? 0) + 1 },
+  }
+}
+
+function removeRail(state, fromHub, toHub) {
+  const newPlacedRails = state.placedRails.filter(
+    r => !((r.from === fromHub && r.to === toHub) || (r.from === toHub && r.to === fromHub))
+  )
+  const graph = buildGraph(newPlacedRails)
+
+  const strandedIds = []
+  const updatedTrains = state.trains.map(t => {
+    if (!t.pathPosition) return t
+    const hub = t.pathPosition.pathHubs?.[0]
+    if (!hub) { strandedIds.push(t.id); return { ...t, pathPosition: null } }
+    const neighbours = graph.get(hub)
+    if (!neighbours || neighbours.size === 0) {
+      strandedIds.push(t.id)
+      return { ...t, pathPosition: null }
+    }
+    const pathHubs = findTraversalPath(graph, hub)
+    return { ...t, pathPosition: { ...t.pathPosition, pathHubs } }
+  })
+
+  const newInventory = [...state.inventory]
+  for (const id of strandedIds) {
+    const train = state.trains.find(t => t.id === id)
+    if (train) newInventory.push({ type: 'train', color: train.color, name: train.name })
+  }
+
+  return { ...state, placedRails: newPlacedRails, trains: updatedTrains, inventory: newInventory }
+}
+
+function inventoryRailCount(state) {
+  return state.inventory.filter(c => c.type === 'rail').length
+}
+
+function inventoryTrains(state) {
+  return state.inventory.filter(c => c.type === 'train')
+}
+
+function inventoryCarriageCount(state) {
+  return state.inventory.filter(c => c.type === 'carriage').length
+}
+
+
+// ── src/mapRenderer.js ──────────────────────────────────────────────────────────
+
+const NS = 'http://www.w3.org/2000/svg'
+
+function el(tag, attrs = {}) {
+  const e = document.createElementNS(NS, tag)
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v)
+  return e
+}
+
+function ensureLayer(parent, id) {
+  let g = parent.ownerSVGElement
+    ? parent.ownerSVGElement.getElementById(id)
+    : parent.getElementById(id)
+  if (!g) { g = el('g', { id }); parent.appendChild(g) }
+  return g
+}
+
+/** Call once after the SVG is in the DOM. Creates the transform group + layers. */
+function initLayers(svg) {
+  let tg = svg.getElementById('map-transform')
+  if (!tg) {
+    tg = el('g', { id: 'map-transform' })
+    svg.appendChild(tg)
+  }
+  // Pull the static outline into the transform group so it pans/zooms with everything else
+  const outline = svg.getElementById('us-outline')
+  if (outline && outline.parentElement !== tg) {
+    tg.insertBefore(outline, tg.firstChild)
+  }
+  for (const id of ['layer-connections', 'layer-rails', 'layer-trains-back', 'layer-hubs', 'layer-trains-front']) {
+    ensureLayer(tg, id)
+  }
+}
+
+/** Convert screen coords → map coords, honouring the pan/zoom transform. */
+function screenToMap(svg, clientX, clientY, viewTransform) {
+  const pt = svg.createSVGPoint()
+  pt.x = clientX
+  pt.y = clientY
+  const svgPt = pt.matrixTransform(svg.getScreenCTM().inverse())
+  return {
+    x: (svgPt.x - viewTransform.tx) / viewTransform.scale,
+    y: (svgPt.y - viewTransform.ty) / viewTransform.scale,
+  }
+}
+
+function applyViewTransform(svg, viewTransform) {
+  const tg = svg.getElementById('map-transform')
+  if (tg) tg.setAttribute('transform', `translate(${viewTransform.tx},${viewTransform.ty}) scale(${viewTransform.scale})`)
+}
+
+function renderHubs(svg, hubs) {
+  const g = svg.getElementById('layer-hubs')
+  if (!g) return
+
+  g.innerHTML = hubs.map(hub => {
+    const isBottom = hub.y > 530
+    const isLeft = hub.x < 80
+    const isRightEdge = hub.x > 860
+    let textAnchor = 'middle', dx = 0, dy = isBottom ? -12 : 16
+    if (isLeft) { textAnchor = 'start'; dx = 10; dy = -4 }
+    else if (isRightEdge) { textAnchor = 'end'; dx = -10; dy = -4 }
+    if (hub.id === 'Seattle')  { textAnchor = 'end';   dx = -10; dy = 4 }
+    if (hub.id === 'Portland') { textAnchor = 'start'; dx = 10;  dy = 4 }
+    if (hub.id === 'Miami')    { dy = -12 }
+    if (hub.id === 'Fargo')    { dy = 16 }
+
+    return [
+      `<circle class="hub-dot" id="hub-${hub.id}" cx="${hub.x}" cy="${hub.y}" r="6"`,
+      ` fill="#555" stroke="#fff" stroke-width="1.5" data-hub="${hub.id}"/>`,
+      `<text class="hub-label" x="${hub.x}" y="${hub.y}" dx="${dx}" dy="${dy}"`,
+      ` text-anchor="${textAnchor}" font-size="10" fill="#333" pointer-events="none">${hub.label}</text>`,
+    ].join('')
+  }).join('')
+}
+
+function renderRails(svg, placedRails, hubMap) {
+  const g = svg.getElementById('layer-rails')
+  if (!g) return
+  g.innerHTML = placedRails.map(({ from, to }) => {
+    const a = hubMap.get(from), b = hubMap.get(to)
+    if (!a || !b) return ''
+    return [
+      `<line class="rail-line" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"`,
+      ` stroke="#8B4513" stroke-width="3" stroke-linecap="round"`,
+      ` data-from="${from}" data-to="${to}"/>`,
+    ].join('')
+  }).join('')
+}
+
+function renderConnectionHints(svg, selectedHub, neighbourIds, placedRails, hubMap) {
+  const g = svg.getElementById('layer-connections')
+  if (!g) return
+  if (!selectedHub) { g.innerHTML = ''; return }
+  const placed = new Set(placedRails.map(r => [r.from, r.to].sort().join('-')))
+  const a = hubMap.get(selectedHub)
+  if (!a) { g.innerHTML = ''; return }
+  g.innerHTML = neighbourIds
+    .filter(id => !placed.has([selectedHub, id].sort().join('-')))
+    .map(id => {
+      const b = hubMap.get(id)
+      if (!b) return ''
+      return `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="#4a9eff" stroke-width="2" stroke-dasharray="6,4" opacity="0.6" pointer-events="none"/>`
+    }).join('')
+}
+
+function setHubHighlight(svg, hubId) {
+  svg.querySelectorAll('.hub-dot').forEach(e => { e.setAttribute('r', '6'); e.setAttribute('fill', '#555') })
+  if (!hubId) return
+  const e = svg.getElementById(`hub-${hubId}`)
+  if (e) { e.setAttribute('r', '9'); e.setAttribute('fill', '#4a9eff') }
+}
+
+// ── Train rendering ───────────────────────────────────────────────────────────
+
+function locoShape(color, id, x, y, angleDeg) {
+  // Locomotive: tapered nose pointing in direction of travel (along +x before rotation)
+  return `<g transform="translate(${x.toFixed(1)},${y.toFixed(1)}) rotate(${angleDeg.toFixed(1)})" data-train="${id}" class="train-loco">
+    <polygon points="-9,-5 6,-5 10,0 6,5 -9,5" fill="${color}" stroke="#fff" stroke-width="1.2"/>
+    <rect x="-9" y="-9" width="7" height="4" rx="1" fill="${color}" stroke="#fff" stroke-width="0.8"/>
+    <rect x="-5" y="-9" width="2" height="3" rx="0.5" fill="#333"/>
+  </g>`
+}
+
+function carriageShape(color, x, y, angleDeg) {
+  return `<g transform="translate(${x.toFixed(1)},${y.toFixed(1)}) rotate(${angleDeg.toFixed(1)})">
+    <rect x="-8" y="-4" width="16" height="8" rx="1.5" fill="${color}" stroke="#fff" stroke-width="0.8" opacity="0.9"/>
+    <line x1="-8" y1="0" x2="8" y2="0" stroke="#fff" stroke-width="0.5" opacity="0.4" pointer-events="none"/>
+  </g>`
+}
+
+function renderTrains(svg, trains, carriageCounts, hubMap, carriageLengthInSegments) {
+  const back = svg.getElementById('layer-trains-back')
+  const front = svg.getElementById('layer-trains-front')
+  if (!back || !front) return
+
+  const backParts = [], frontParts = []
+
+  for (const train of trains) {
+    if (!train.pathPosition) continue
+    const { pathPosition: pos, color, id } = train
+    const count = carriageCounts[id] ?? 0
+
+    for (let i = count - 1; i >= 0; i--) {
+      const { x, y } = carriageCoords(pos, i, carriageLengthInSegments, hubMap)
+      const ang = carriageAngle(pos, i, carriageLengthInSegments, hubMap) * 180 / Math.PI
+      backParts.push(carriageShape(color, x, y, ang))
+    }
+
+    const { x, y } = trainHeadCoords(pos, hubMap)
+    const ang = trainHeadAngle(pos, hubMap) * 180 / Math.PI
+    frontParts.push(locoShape(color, id, x, y, ang))
+  }
+
+  back.innerHTML = backParts.join('')
+  front.innerHTML = frontParts.join('')
+}
+
+
+// ── src/ui.js ──────────────────────────────────────────────────────────
+
+
+
+
+
+
+
+const CARRIAGE_LENGTH = 0.12
+const MIN_SCALE = 0.5
+const MAX_SCALE = 8
+
+let state = loadState()
+let mode = 'idle'
+let selectedHub = null
+let activeTrainColor = null
+let lastTimestamp = null
+
+// ── View transform (pan/zoom) ─────────────────────────────────────────────────
+let vt = { tx: 0, ty: 0, scale: 1 }
+
+function clampVT() {
+  vt.scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, vt.scale))
+}
+
+function toMap(clientX, clientY) {
+  return screenToMap(svg, clientX, clientY, vt)
+}
+
+// ── DOM refs ──────────────────────────────────────────────────────────────────
+const tabMap      = document.getElementById('tab-map')
+const tabCal      = document.getElementById('tab-calendar')
+const mapView     = document.getElementById('map-view')
+const calView     = document.getElementById('calendar-view')
+const svg         = document.getElementById('us-map')
+const inventoryBar = document.getElementById('inventory-bar')
+const calGrid     = document.getElementById('calendar-grid')
+const statusBar   = document.getElementById('status-bar')
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+tabMap.addEventListener('click', () => {
+  tabMap.classList.add('active'); tabCal.classList.remove('active')
+  mapView.hidden = false; calView.hidden = true
+})
+tabCal.addEventListener('click', () => {
+  tabCal.classList.add('active'); tabMap.classList.remove('active')
+  calView.hidden = false; mapView.hidden = true
+  renderCalendarGrid()
+})
+
+// ── Keyboard ──────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') resetMode()
+})
+
+// ── Inventory bar ─────────────────────────────────────────────────────────────
+function renderInventoryBar() {
+  const rails     = inventoryRailCount(state)
+  const trains    = inventoryTrains(state)
+  const carriages = inventoryCarriageCount(state)
+  const parts = []
+
+  if (rails > 0) {
+    parts.push(`<button class="inv-item${mode === 'placingRail' ? ' active' : ''}" data-action="placeRail">
+      <span class="inv-icon">🛤</span><span class="inv-count">${rails}× Rail</span>
+    </button>`)
+  }
+
+  for (const train of trains) {
+    const active = mode === 'placingTrain' && activeTrainColor === train.color ? ' active' : ''
+    parts.push(`<button class="inv-item${active}" data-action="placeTrain" data-color="${train.color}" style="border-color:${train.color}">
+      <span class="inv-icon" style="color:${train.color}">🚂</span><span class="inv-count">${train.name}</span>
+    </button>`)
+  }
+
+  if (carriages > 0) {
+    parts.push(`<button class="inv-item${mode === 'placingCarriage' ? ' active' : ''}" data-action="placeCarriage">
+      <span class="inv-icon">🚃</span><span class="inv-count">${carriages}× Carriage</span>
+    </button>`)
+  }
+
+  if (parts.length === 0) {
+    parts.push('<span class="inv-empty">Open calendar doors to unlock components</span>')
+  }
+
+  inventoryBar.innerHTML = parts.join('')
+
+  inventoryBar.querySelector('[data-action="placeRail"]')?.addEventListener('click', () => {
+    if (mode === 'placingRail') { resetMode(); return }
+    resetMode(); mode = 'placingRail'
+    inventoryBar.querySelector('[data-action="placeRail"]')?.classList.add('active')
+    showStatus('Click a city, then click a connected city to place rail')
+  })
+
+  inventoryBar.querySelectorAll('[data-action="placeTrain"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const color = btn.dataset.color
+      if (mode === 'placingTrain' && activeTrainColor === color) { resetMode(); return }
+      resetMode(); mode = 'placingTrain'; activeTrainColor = color
+      btn.classList.add('active')
+      showStatus('Click a rail segment to place this train')
+    })
+  })
+
+  inventoryBar.querySelector('[data-action="placeCarriage"]')?.addEventListener('click', () => {
+    if (mode === 'placingCarriage') { resetMode(); return }
+    resetMode(); mode = 'placingCarriage'
+    inventoryBar.querySelector('[data-action="placeCarriage"]')?.classList.add('active')
+    showStatus('Click a train to add a carriage')
+  })
+}
+
+function resetMode() {
+  mode = 'idle'; selectedHub = null; activeTrainColor = null
+  setHubHighlight(svg, null)
+  renderConnectionHints(svg, null, [], state.placedRails, HUB_MAP)
+  hideStatus()
+  renderInventoryBar()
+}
+
+// ── SVG click / tap handler ───────────────────────────────────────────────────
+function handleMapInteraction(clientX, clientY, targetEl) {
+  const pt = toMap(clientX, clientY)
+
+  if (mode === 'placingRail') {
+    const hub = getHubAtPoint(pt.x, pt.y, 18)
+    if (!hub) return
+    if (!selectedHub) {
+      selectedHub = hub.id
+      setHubHighlight(svg, hub.id)
+      renderConnectionHints(svg, hub.id, getNeighbours(hub.id), state.placedRails, HUB_MAP)
+      showStatus(`${hub.label} selected — click a highlighted city to connect`)
+    } else if (hub.id === selectedHub) {
+      resetMode()
+    } else {
+      try {
+        state = placeRail(state, selectedHub, hub.id)
+        saveState(state); resetMode(); renderAll()
+      } catch (err) { showStatus(err.message, true); setTimeout(hideStatus, 2500) }
+    }
+    return
+  }
+
+  if (mode === 'placingTrain') {
+    const rail = findRailAtPoint(pt.x, pt.y, 10)
+    if (rail) {
+      try {
+        state = placeTrain(state, activeTrainColor, rail.from, rail.to)
+        saveState(state); resetMode(); renderAll()
+      } catch (err) { showStatus(err.message, true); setTimeout(hideStatus, 2500) }
+    }
+    return
+  }
+
+  if (mode === 'placingCarriage') {
+    // First try direct element hit (train circles have data-train attr)
+    const trainId = targetEl?.closest?.('[data-train]')?.dataset?.train
+      ?? targetEl?.dataset?.train
+      ?? findTrainAtPoint(pt.x, pt.y, 16)
+    if (trainId) {
+      try {
+        state = addCarriage(state, trainId)
+        saveState(state); resetMode(); renderAll()
+      } catch (err) { showStatus(err.message, true); setTimeout(hideStatus, 2500) }
+    }
+  }
+}
+
+svg.addEventListener('click', e => {
+  if (pointerMoved) return  // suppress click after a drag
+  handleMapInteraction(e.clientX, e.clientY, e.target)
+})
+
+// ── Pan & zoom (mouse) ────────────────────────────────────────────────────────
+let isDragging = false
+let pointerMoved = false
+let dragOrigin = null
+
+svg.addEventListener('mousedown', e => {
+  if (e.button !== 0) return
+  isDragging = true
+  pointerMoved = false
+  dragOrigin = { x: e.clientX, y: e.clientY, tx: vt.tx, ty: vt.ty }
+})
+
+window.addEventListener('mousemove', e => {
+  if (!isDragging) return
+  const dx = e.clientX - dragOrigin.x
+  const dy = e.clientY - dragOrigin.y
+  if (Math.hypot(dx, dy) > 4) pointerMoved = true
+  if (mode !== 'idle') return  // don't pan during placement
+  const bbox = svg.getBoundingClientRect()
+  vt.tx = dragOrigin.tx + dx * 1000 / bbox.width
+  vt.ty = dragOrigin.ty + dy * 600 / bbox.height
+  applyViewTransform(svg, vt)
+})
+
+window.addEventListener('mouseup', () => { isDragging = false })
+
+svg.addEventListener('wheel', e => {
+  e.preventDefault()
+  const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87
+  const bbox = svg.getBoundingClientRect()
+  const svgX = (e.clientX - bbox.left) * 1000 / bbox.width
+  const svgY = (e.clientY - bbox.top) * 600 / bbox.height
+  const mapX = (svgX - vt.tx) / vt.scale
+  const mapY = (svgY - vt.ty) / vt.scale
+  vt.scale *= zoomFactor
+  clampVT()
+  vt.tx = svgX - mapX * vt.scale
+  vt.ty = svgY - mapY * vt.scale
+  applyViewTransform(svg, vt)
+}, { passive: false })
+
+// ── Pan & zoom (touch) ────────────────────────────────────────────────────────
+let lastTouches = []
+let touchMoved = false
+
+svg.addEventListener('touchstart', e => {
+  e.preventDefault()
+  touchMoved = false
+  lastTouches = Array.from(e.touches).map(t => ({ x: t.clientX, y: t.clientY }))
+}, { passive: false })
+
+svg.addEventListener('touchmove', e => {
+  e.preventDefault()
+  const touches = Array.from(e.touches).map(t => ({ x: t.clientX, y: t.clientY }))
+  const bbox = svg.getBoundingClientRect()
+
+  if (touches.length === 1 && lastTouches.length === 1) {
+    const dx = touches[0].x - lastTouches[0].x
+    const dy = touches[0].y - lastTouches[0].y
+    if (Math.hypot(dx, dy) > 4) touchMoved = true
+    if (mode === 'idle') {
+      vt.tx += dx * 1000 / bbox.width
+      vt.ty += dy * 600 / bbox.height
+      applyViewTransform(svg, vt)
+    }
+  } else if (touches.length === 2 && lastTouches.length >= 2) {
+    touchMoved = true
+    const prevDist = Math.hypot(lastTouches[1].x - lastTouches[0].x, lastTouches[1].y - lastTouches[0].y)
+    const newDist  = Math.hypot(touches[1].x - touches[0].x, touches[1].y - touches[0].y)
+    if (prevDist === 0) { lastTouches = touches; return }
+    const zoomFactor = newDist / prevDist
+    const midClientX = (touches[0].x + touches[1].x) / 2
+    const midClientY = (touches[0].y + touches[1].y) / 2
+    const svgX = (midClientX - bbox.left) * 1000 / bbox.width
+    const svgY = (midClientY - bbox.top)  * 600  / bbox.height
+    const mapX = (svgX - vt.tx) / vt.scale
+    const mapY = (svgY - vt.ty) / vt.scale
+    vt.scale *= zoomFactor
+    clampVT()
+    vt.tx = svgX - mapX * vt.scale
+    vt.ty = svgY - mapY * vt.scale
+    applyViewTransform(svg, vt)
+  }
+  lastTouches = touches
+}, { passive: false })
+
+svg.addEventListener('touchend', e => {
+  if (!touchMoved && e.changedTouches.length === 1 && lastTouches.length <= 1) {
+    const t = e.changedTouches[0]
+    handleMapInteraction(t.clientX, t.clientY, document.elementFromPoint(t.clientX, t.clientY))
+  }
+  lastTouches = []
+})
+
+// ── Hit testing ───────────────────────────────────────────────────────────────
+function findRailAtPoint(px, py, threshold = 10) {
+  for (const rail of state.placedRails) {
+    const a = HUB_MAP.get(rail.from), b = HUB_MAP.get(rail.to)
+    if (!a || !b) continue
+    if (pointToSegDist(px, py, a.x, a.y, b.x, b.y) <= threshold) return rail
+  }
+  return null
+}
+
+function pointToSegDist(px, py, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay
+  const len2 = dx * dx + dy * dy
+  if (len2 === 0) return Math.hypot(px - ax, py - ay)
+  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2))
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy))
+}
+
+function findTrainAtPoint(px, py, threshold = 16) {
+  for (const train of state.trains) {
+    if (!train.pathPosition) continue
+    const { pathHubs, segmentIndex, progress } = train.pathPosition
+    const a = HUB_MAP.get(pathHubs[segmentIndex])
+    const b = HUB_MAP.get(pathHubs[segmentIndex + 1])
+    if (!a || !b) continue
+    const x = a.x + (b.x - a.x) * progress
+    const y = a.y + (b.y - a.y) * progress
+    if (Math.hypot(px - x, py - y) <= threshold) return train.id
+  }
+  return null
+}
+
+// ── Calendar ──────────────────────────────────────────────────────────────────
+function renderCalendarGrid() {
+  const now = new Date()
+  const unlockedCount = getUnlockedDoorCount(now)
+
+  calGrid.innerHTML = Array.from({ length: TOTAL_DOORS }, (_, i) => {
+    const door = i + 1
+    const opened = state.openedDoors.includes(door)
+    const unlocked = door <= unlockedCount
+
+    if (opened) {
+      const u = getUnlockable(door)
+      const icon = u.type === 'train'
+        ? `<span class="door-icon" style="color:${u.color}">🚂</span>`
+        : u.type === 'rail' ? `<span class="door-icon">🛤</span>`
+        : `<span class="door-icon">🚃</span>`
+      return `<div class="door opened"><span class="door-num">${door}</span>${icon}<span class="door-label">${u.label}</span></div>`
+    }
+
+    if (unlocked) {
+      return `<button class="door unlocked" data-door="${door}">
+        <span class="door-num">${door}</span>
+        <span class="door-icon">🎁</span>
+      </button>`
+    }
+
+    const remaining = getTimeUntilUnlock(door, now)
+    return `<div class="door locked" data-door="${door}">
+      <span class="door-num">${door}</span>
+      <span class="door-countdown" data-unlock="${getUnlockTime(door)}">${formatCountdown(remaining)}</span>
+    </div>`
+  }).join('')
+
+  calGrid.querySelectorAll('.door.unlocked').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const door = Number(btn.dataset.door)
+      state = openDoor(state, door, getUnlockable(door))
+      saveState(state)
+      renderCalendarGrid()
+      renderInventoryBar()
+    })
+  })
+}
+
+// ── Countdown tick ────────────────────────────────────────────────────────────
+setInterval(() => {
+  const now = new Date()
+  document.querySelectorAll('.door-countdown').forEach(el => {
+    const unlockMs = Number(el.dataset.unlock)
+    if (!unlockMs) return
+    const remaining = Math.max(0, unlockMs - now.getTime())
+    el.textContent = formatCountdown(remaining)
+    if (remaining === 0) renderCalendarGrid()
+  })
+}, 1000)
+
+// ── Animation loop ────────────────────────────────────────────────────────────
+function tick(timestamp) {
+  if (lastTimestamp !== null) {
+    const delta = Math.min((timestamp - lastTimestamp) / 1000, 0.1)
+    state = {
+      ...state,
+      trains: state.trains.map(t =>
+        t.pathPosition ? { ...t, pathPosition: advanceTrainPosition(t.pathPosition, delta) } : t
+      ),
+    }
+    renderTrains(svg, state.trains, state.carriageCounts, HUB_MAP, CARRIAGE_LENGTH)
+  }
+  lastTimestamp = timestamp
+  requestAnimationFrame(tick)
+}
+
+// ── Full re-render ────────────────────────────────────────────────────────────
+function renderAll() {
+  renderHubs(svg, HUBS)
+  renderRails(svg, state.placedRails, HUB_MAP)
+  renderConnectionHints(svg, selectedHub, selectedHub ? getNeighbours(selectedHub) : [], state.placedRails, HUB_MAP)
+  renderInventoryBar()
+}
+
+// ── Status bar ────────────────────────────────────────────────────────────────
+function showStatus(msg, isError = false) {
+  if (!statusBar) return
+  statusBar.textContent = msg
+  statusBar.className = isError ? 'error' : ''
+  statusBar.hidden = false
+}
+function hideStatus() { if (statusBar) statusBar.hidden = true }
+
+// ── Reset view ────────────────────────────────────────────────────────────────
+document.getElementById('reset-view')?.addEventListener('click', () => {
+  vt = { tx: 0, ty: 0, scale: 1 }
+  applyViewTransform(svg, vt)
+})
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+initLayers(svg)
+renderAll()
+requestAnimationFrame(tick)
+
+const count = getUnlockedDoorCount()
+const unopened = Array.from({ length: count }, (_, i) => i + 1).filter(d => !state.openedDoors.includes(d))
+if (unopened.length > 0) {
+  showStatus(`${unopened.length} calendar door${unopened.length > 1 ? 's' : ''} ready to open!`)
+  setTimeout(hideStatus, 5000)
+}
+
+</script>
+</body>
+</html>
