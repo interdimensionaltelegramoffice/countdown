@@ -709,21 +709,39 @@ function loadState() {
   }
 }
 
-// Migrates old {pathHubs, segmentIndex, progress, direction} format and ensures trail exists.
+// Migrates saved positions to {fromHub, toHub, progress, trail} format.
+// Old saves had pathHubs stripped, leaving {segmentIndex, progress, direction} — recover via startHub + graph.
 function migratePositions(state) {
+  const graph = buildGraph(state.placedRails)
+
   const trains = state.trains.map(t => {
     if (!t.pathPosition) return t
-    if (t.pathPosition.pathHubs) {
-      const { pathHubs, segmentIndex, progress, direction = 1 } = t.pathPosition
+    const pos = t.pathPosition
+
+    // Already in new format
+    if (pos.fromHub && pos.toHub) {
+      return pos.trail ? t : { ...t, pathPosition: { ...pos, trail: [] } }
+    }
+
+    // Old in-memory format with pathHubs still present (never saved, but guard anyway)
+    if (pos.pathHubs) {
+      const { pathHubs, segmentIndex, progress, direction = 1 } = pos
       const fromHub = direction === 1 ? pathHubs[segmentIndex] : pathHubs[segmentIndex + 1]
       const toHub   = direction === 1 ? pathHubs[segmentIndex + 1] : pathHubs[segmentIndex]
       if (!fromHub || !toHub) return { ...t, pathPosition: null }
       return { ...t, pathPosition: { fromHub, toHub, progress: direction === 1 ? progress : 1 - progress, trail: [] } }
     }
-    if (!t.pathPosition.trail) {
-      return { ...t, pathPosition: { ...t.pathPosition, trail: [] } }
+
+    // Old stripped format {segmentIndex, progress, direction} — reconstruct from startHub
+    const hub = t.startHub
+    if (hub) {
+      const neighbours = [...(graph.get(hub) ?? new Set())]
+      if (neighbours.length > 0) {
+        return { ...t, pathPosition: { fromHub: hub, toHub: neighbours[0], progress: 0, trail: [] } }
+      }
     }
-    return t
+
+    return { ...t, pathPosition: null }
   })
   return { ...state, trains }
 }
