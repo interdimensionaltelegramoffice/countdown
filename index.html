@@ -576,86 +576,73 @@ function findTraversalPath(graph, startHub) {
   return best
 }
 
-function advanceTrainPosition(pos, deltaSeconds, speedSegmentsPerSecond = 0.15) {
-  let { pathHubs, segmentIndex, progress, direction } = pos
-  const maxSegment = pathHubs.length - 2
+// Position format: { fromHub, toHub, progress, trail }
+// trail: [{from, to}, ...] most-recent first — segments already traversed, used for carriage placement
+const MAX_TRAIL = 5
 
-  // Single-hub path — nothing to traverse
-  if (maxSegment < 0) return pos
+function advanceTrainPosition(pos, deltaSeconds, speedSegmentsPerSecond = 0.15, graph) {
+  let { fromHub, toHub, progress, trail = [] } = pos
+  if (!fromHub || !toHub) return pos
 
-  progress += direction * speedSegmentsPerSecond * deltaSeconds
+  progress += speedSegmentsPerSecond * deltaSeconds
 
-  // Handle overflow/underflow with reflection
-  while (true) {
-    if (progress >= 1) {
-      if (segmentIndex < maxSegment) {
-        segmentIndex++
-        progress -= 1
-      } else {
-        direction = -1
-        progress = 1 - (progress - 1)
-        break
-      }
-    } else if (progress <= 0) {
-      if (segmentIndex > 0) {
-        segmentIndex--
-        progress += 1
-      } else {
-        direction = 1
-        progress = -progress
-        break
-      }
-    } else {
-      break
-    }
+  while (progress >= 1) {
+    progress -= 1
+    const arrivedAt = toHub
+    const cameFrom = fromHub
+    trail = [{ from: cameFrom, to: arrivedAt }, ...trail].slice(0, MAX_TRAIL)
+
+    const neighbours = graph ? [...(graph.get(arrivedAt) ?? new Set())] : []
+    const options = neighbours.filter(h => h !== cameFrom)
+    fromHub = arrivedAt
+    toHub = options.length > 0
+      ? options[Math.floor(Math.random() * options.length)]
+      : cameFrom  // dead end: reverse
   }
 
-  // Safety clamp
   progress = Math.max(0, Math.min(1, progress))
-
-  return { pathHubs, segmentIndex, progress, direction }
+  return { fromHub, toHub, progress, trail }
 }
 
 function trainHeadCoords(pos, hubMap) {
-  const { pathHubs, segmentIndex, progress } = pos
-  const a = hubMap.get(pathHubs[segmentIndex])
-  const b = hubMap.get(pathHubs[segmentIndex + 1])
+  const a = hubMap.get(pos.fromHub)
+  const b = hubMap.get(pos.toHub)
   if (!a || !b) return { x: 0, y: 0 }
   return {
-    x: a.x + (b.x - a.x) * progress,
-    y: a.y + (b.y - a.y) * progress,
+    x: a.x + (b.x - a.x) * pos.progress,
+    y: a.y + (b.y - a.y) * pos.progress,
   }
 }
 
-// Walk `offsetInSegments` behind the locomotive (opposite to direction of travel).
-// Returns the {pathHubs, segmentIndex, progress, direction} at that position.
-function segmentStateAtOffset(pos, offsetInSegments) {
-  let { pathHubs, segmentIndex, progress, direction } = pos
-  const maxSeg = pathHubs.length - 2
-  let remaining = offsetInSegments
+// Walk `offset` segments behind the locomotive through the trail.
+// Returns { from, to, progress } of the segment the offset position sits on.
+function carriageSegment(pos, offset) {
+  let remaining = offset
 
-  if (direction === 1) {
-    // Moving toward higher progress → carriages trail toward path start
-    while (remaining > 0) {
-      if (progress >= remaining) { progress -= remaining; remaining = 0 }
-      else { remaining -= progress; if (segmentIndex > 0) { segmentIndex--; progress = 1 } else { progress = 0; remaining = 0 } }
+  if (pos.progress >= remaining) {
+    return { from: pos.fromHub, to: pos.toHub, progress: pos.progress - remaining }
+  }
+  remaining -= pos.progress
+
+  for (const seg of (pos.trail ?? [])) {
+    if (remaining <= 1) {
+      return { from: seg.from, to: seg.to, progress: 1 - remaining }
     }
-  } else {
-    // Moving toward lower progress → carriages trail toward path end
-    while (remaining > 0) {
-      const distToEnd = 1 - progress
-      if (distToEnd >= remaining) { progress += remaining; remaining = 0 }
-      else { remaining -= distToEnd; if (segmentIndex < maxSeg) { segmentIndex++; progress = 0 } else { progress = 1; remaining = 0 } }
-    }
+    remaining -= 1
   }
 
-  return { pathHubs, segmentIndex, progress, direction }
+  const trail = pos.trail ?? []
+  if (trail.length > 0) {
+    const last = trail[trail.length - 1]
+    return { from: last.from, to: last.to, progress: 0 }
+  }
+  return { from: pos.fromHub, to: pos.toHub, progress: 0 }
 }
 
-function positionAtOffset(pos, offsetInSegments, hubMap) {
-  const { pathHubs, segmentIndex, progress } = segmentStateAtOffset(pos, offsetInSegments)
-  const a = hubMap.get(pathHubs[segmentIndex])
-  const b = hubMap.get(pathHubs[segmentIndex + 1])
+function carriageCoords(pos, carriageIndex, carriageLengthInSegments, hubMap) {
+  const { from, to, progress } = carriageSegment(pos, (carriageIndex + 1) * carriageLengthInSegments)
+  const a = hubMap.get(from)
+  const b = hubMap.get(to)
   if (!a || !b) return { x: a?.x ?? 0, y: a?.y ?? 0 }
   return {
     x: a.x + (b.x - a.x) * progress,
@@ -663,42 +650,34 @@ function positionAtOffset(pos, offsetInSegments, hubMap) {
   }
 }
 
-function carriageCoords(pos, carriageIndex, carriageLengthInSegments, hubMap) {
-  const offset = (carriageIndex + 1) * carriageLengthInSegments
-  return positionAtOffset(pos, offset, hubMap)
-}
-
 function trainHeadAngle(pos, hubMap) {
-  const { pathHubs, segmentIndex, direction } = pos
-  const a = hubMap.get(pathHubs[segmentIndex])
-  const b = hubMap.get(pathHubs[segmentIndex + 1])
+  const a = hubMap.get(pos.fromHub)
+  const b = hubMap.get(pos.toHub)
   if (!a || !b) return 0
-  const base = Math.atan2(b.y - a.y, b.x - a.x)
-  return direction === 1 ? base : base + Math.PI
+  return Math.atan2(b.y - a.y, b.x - a.x)
 }
 
 function carriageAngle(pos, carriageIndex, carriageLengthInSegments, hubMap) {
-  const offset = (carriageIndex + 1) * carriageLengthInSegments
-  const { pathHubs, segmentIndex, direction } = segmentStateAtOffset(pos, offset)
-  const a = hubMap.get(pathHubs[segmentIndex])
-  const b = hubMap.get(pathHubs[segmentIndex + 1])
+  const { from, to } = carriageSegment(pos, (carriageIndex + 1) * carriageLengthInSegments)
+  const a = hubMap.get(from)
+  const b = hubMap.get(to)
   if (!a || !b) return 0
-  const base = Math.atan2(b.y - a.y, b.x - a.x)
-  return direction === 1 ? base : base + Math.PI
+  return Math.atan2(b.y - a.y, b.x - a.x)
 }
 
 function reconcileTrainsAfterRailRemoval(trains, newGraph) {
   const strandedIds = []
   const updatedTrains = trains.map(t => {
     if (!t.pathPosition) return t
-    const hub = t.pathPosition.pathHubs?.[t.pathPosition.segmentIndex]
-    const neighbours = hub ? newGraph.get(hub) : null
+    const { fromHub, toHub } = t.pathPosition
+    if (newGraph.get(fromHub)?.has(toHub)) return t
+    const neighbours = newGraph.get(fromHub)
     if (!neighbours || neighbours.size === 0) {
       strandedIds.push(t.id)
       return { ...t, pathPosition: null }
     }
-    const pathHubs = findTraversalPath(newGraph, hub)
-    return { ...t, pathPosition: { ...t.pathPosition, pathHubs } }
+    const newTo = [...neighbours][0]
+    return { ...t, pathPosition: { fromHub, toHub: newTo, progress: 0, trail: [] } }
   })
   return { trains: updatedTrains, strandedIds }
 }
@@ -724,34 +703,33 @@ function loadState() {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return createInitialState()
     const state = JSON.parse(raw)
-    return restorePathHubs(state)
+    return migratePositions(state)
   } catch {
     return createInitialState()
   }
 }
 
-function saveState(state) {
-  const serialisable = {
-    ...state,
-    trains: state.trains.map(t => {
-      if (!t.pathPosition) return t
-      const { pathHubs: _stripped, ...pos } = t.pathPosition
-      return { ...t, pathPosition: pos }
-    }),
-  }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(serialisable))
-}
-
-function restorePathHubs(state) {
-  const graph = buildGraph(state.placedRails)
+// Migrates old {pathHubs, segmentIndex, progress, direction} format and ensures trail exists.
+function migratePositions(state) {
   const trains = state.trains.map(t => {
     if (!t.pathPosition) return t
-    const hub = t.startHub ?? state.placedRails[0]?.from
-    if (!hub) return { ...t, pathPosition: null }
-    const pathHubs = findTraversalPath(graph, hub)
-    return { ...t, pathPosition: { ...t.pathPosition, pathHubs } }
+    if (t.pathPosition.pathHubs) {
+      const { pathHubs, segmentIndex, progress, direction = 1 } = t.pathPosition
+      const fromHub = direction === 1 ? pathHubs[segmentIndex] : pathHubs[segmentIndex + 1]
+      const toHub   = direction === 1 ? pathHubs[segmentIndex + 1] : pathHubs[segmentIndex]
+      if (!fromHub || !toHub) return { ...t, pathPosition: null }
+      return { ...t, pathPosition: { fromHub, toHub, progress: direction === 1 ? progress : 1 - progress, trail: [] } }
+    }
+    if (!t.pathPosition.trail) {
+      return { ...t, pathPosition: { ...t.pathPosition, trail: [] } }
+    }
+    return t
   })
   return { ...state, trains }
+}
+
+function saveState(state) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
 }
 
 function openDoor(state, doorNumber, unlockable) {
@@ -778,17 +756,8 @@ function placeRail(state, fromHub, toHub) {
   const newInventory = [...state.inventory]
   newInventory.splice(idx, 1)
 
-  const newPlacedRails = [...state.placedRails, { from: fromHub, to: toHub }]
-  const graph = buildGraph(newPlacedRails)
-
-  const updatedTrains = state.trains.map(t => {
-    if (!t.pathPosition) return t
-    const hub = t.startHub ?? t.pathPosition.pathHubs?.[0] ?? fromHub
-    const pathHubs = findTraversalPath(graph, hub)
-    return { ...t, pathPosition: { ...t.pathPosition, pathHubs } }
-  })
-
-  return { ...state, inventory: newInventory, placedRails: newPlacedRails, trains: updatedTrains }
+  // Trains discover new track naturally via random routing — no path update needed.
+  return { ...state, inventory: newInventory, placedRails: [...state.placedRails, { from: fromHub, to: toHub }] }
 }
 
 function placeTrain(state, trainColor, fromHub, toHub) {
@@ -805,15 +774,12 @@ function placeTrain(state, trainColor, fromHub, toHub) {
   const newInventory = [...state.inventory]
   newInventory.splice(idx, 1)
 
-  const graph = buildGraph(state.placedRails)
-  const pathHubs = findTraversalPath(graph, fromHub)
-
   const train = {
     id,
     color: trainData.color,
     name: trainData.name,
     startHub: fromHub,
-    pathPosition: { pathHubs, segmentIndex: 0, progress: 0, direction: 1 },
+    pathPosition: { fromHub, toHub, progress: 0, trail: [] },
   }
 
   return {
@@ -849,15 +815,15 @@ function removeRail(state, fromHub, toHub) {
   const strandedIds = []
   const updatedTrains = state.trains.map(t => {
     if (!t.pathPosition) return t
-    const hub = t.pathPosition.pathHubs?.[0]
-    if (!hub) { strandedIds.push(t.id); return { ...t, pathPosition: null } }
-    const neighbours = graph.get(hub)
+    const { fromHub: tf, toHub: tt } = t.pathPosition
+    if (graph.get(tf)?.has(tt)) return t
+    const neighbours = graph.get(tf)
     if (!neighbours || neighbours.size === 0) {
       strandedIds.push(t.id)
       return { ...t, pathPosition: null }
     }
-    const pathHubs = findTraversalPath(graph, hub)
-    return { ...t, pathPosition: { ...t.pathPosition, pathHubs } }
+    const newTo = [...neighbours][0]
+    return { ...t, pathPosition: { fromHub: tf, toHub: newTo, progress: 0, trail: [] } }
   })
 
   const newInventory = [...state.inventory]
@@ -1402,10 +1368,11 @@ setInterval(() => {
 function tick(timestamp) {
   if (lastTimestamp !== null) {
     const delta = Math.min((timestamp - lastTimestamp) / 1000, 0.1)
+    const graph = buildGraph(state.placedRails)
     state = {
       ...state,
       trains: state.trains.map(t =>
-        t.pathPosition ? { ...t, pathPosition: advanceTrainPosition(t.pathPosition, delta) } : t
+        t.pathPosition ? { ...t, pathPosition: advanceTrainPosition(t.pathPosition, delta, 0.15, graph) } : t
       ),
     }
     renderTrains(svg, state.trains, state.carriageCounts, HUB_MAP, CARRIAGE_LENGTH)
